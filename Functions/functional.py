@@ -261,7 +261,36 @@ def random_crop(img, patch_size):
     :param patch_size: patch size
     :return: PIL.Image, patch
     """
+    if not _is_pil_image(img):
+        raise TypeError('img should be PIL Image. Got {}'.format(type(img)))
 
+    w, h = img.size
+    if patch_size >= w or patch_size >= h:
+        if w < h:
+            img = resize(img, (math.ceil((patch_size / w) * h), patch_size), interpolation=Image.BICUBIC)
+        elif h < w:
+            img = resize(img, (patch_size, math.ceil((patch_size / h) * w)), interpolation=Image.BICUBIC)
+        else:
+            img = resize(img, patch_size, interpolation=Image.BICUBIC)
+    w, h = img.size
+    w_start = random.randint(0, w - patch_size)
+    h_start = random.randint(0, h - patch_size)
+    return crop(img, h_start, w_start, patch_size, patch_size)
+
+
+def random_pre_process(img):
+    """
+    Random pre-processing the input Image
+    :param img: PIL.Image
+    :return: PIL.Image
+    """
+    if bool(random.getrandbits(1)):
+        img = hflip(img)
+    if bool(random.getrandbits(1)):
+        img = vflip(img)
+    # the effect of PIL rotate is bad, do not use it in Image processing
+    # angle = random.randrange(0, 0)
+    return img
 
 
 def center_crop(img, output_size):

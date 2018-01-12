@@ -29,6 +29,6 @@ Import TorchTools directly in your python files
 The functions or class start with `_` or `__` are Internal implementation, I don't recommend you to use them directly unless you know how it works.
 ### Future Needs
 Create issue if you want some functions or tools.
-Bug reports are **needed**.
+Bug reports are **NEEDED**.
 ### Change Logs
 - 18.01.12 First commit

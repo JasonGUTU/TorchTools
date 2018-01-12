@@ -14,6 +14,11 @@ IMG_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.ppm', '.bmp', '.pgm']
 
 
 def _is_image_file(filename):
+    """
+    judge if the file is an image file
+    :param filename: path
+    :return: bool of judgement
+    """
     filename_lower = filename.lower()
     return any(filename_lower.endswith(ext) for ext in IMG_EXTENSIONS)
 
@@ -73,6 +78,18 @@ def _sample_from_videos_frames(path, time_window, time_stride):
     return sample_list
 
 
+# TODO: large sample number function
+def _sample_from_videos_frames_large(path, time_window, time_stride):
+    """
+    write to a file, return one sample once. use pointer
+    :param path:
+    :param time_window:
+    :param time_stride:
+    :return:
+    """
+    pass
+
+
 def _image_file(path):
     """
     return list of images in the path
@@ -89,11 +106,11 @@ def _image_file(path):
 
 def _all_images(path):
     """
-    TODO: Tail Call Elimination
     return all images in the folder
     :param path: path to Data Folder, absolute path
     :return: 1D list of image files absolute path
     """
+    # TODO: Tail Call Elimination
     abs_path = os.path.abspath(path)
     image_files = list()
     for subpath in os.listdir(abs_path):
