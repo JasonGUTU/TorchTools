@@ -1,7 +1,3 @@
-import argparse
-import os
-import sys
-import time
 try:
     from math import log10
 except ImportError:
@@ -10,12 +6,8 @@ except ImportError:
         return log(x) / log(10.)
 
 import torch
-import torch.nn as nn
-from torch.autograd import Variable
-import torchvision.transforms as transforms
-from PIL import Image
 
-from .functional import to_tensor
+from Functions.functional import to_tensor
 
 
 def mse(x, y):

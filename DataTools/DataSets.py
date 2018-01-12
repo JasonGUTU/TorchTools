@@ -8,8 +8,9 @@ import numpy as np
 
 from .FileTools import _image_file, _all_images, _video_image_file, _sample_from_videos_frames
 from .Loaders import pil_loader, load_to_tensor
-import torchvision.transforms.functional as Func
 from .Prepro import _id, random_pre_process
+
+from ..Functions import functional as Func
 
 
 class SRDataSet(data.Dataset):
