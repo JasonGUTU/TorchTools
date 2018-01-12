@@ -254,6 +254,16 @@ def crop(img, i, j, h, w):
     return img.crop((j, i, j + w, i + h))
 
 
+def random_crop(img, patch_size):
+    """
+    Random crop patch from img
+    :param img: PIL.Image
+    :param patch_size: patch size
+    :return: PIL.Image, patch
+    """
+
+
+
 def center_crop(img, output_size):
     if isinstance(output_size, numbers.Number):
         output_size = (int(output_size), int(output_size))

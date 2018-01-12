@@ -17,10 +17,18 @@ class SRDataSet(data.Dataset):
     """
     DataSet for small images, easy to read
     do not need buffer
-    do not need to random crop
+    random crop.
     all the image are same size
     """
-    def __init__(self, data_path, lr_patch_size, image_size, scala=4, interp=Image.BICUBIC, mode='Y', sub_dir=False, prepro=random_pre_process):
+    def __init__(self,
+                 data_path,
+                 lr_patch_size,
+                 image_size,
+                 scala=4,
+                 interp=Image.BICUBIC,
+                 mode='Y',
+                 sub_dir=False,
+                 prepro=random_pre_process):
         """
         :param data_path: Path to data root
         :param lr_patch_size: the Low resolution size
