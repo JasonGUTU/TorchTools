@@ -64,3 +64,4 @@ def random_pre_process(img):
     angle = random.randrange(-15, 15)
     return rotate(img, angle)
 
+

@@ -56,3 +56,94 @@ class deconvUpsampleBlock(nn.Module):
     def forward(self, x):
         return self.act(self.deconv_1(x))
 
+
+class Features4Layer(nn.Module):
+    """
+    Basic feature extractor, 4 layer version
+    """
+    def __init__(self, features=64, activation=swish):
+        """
+        :param frame: The input frame image
+        :param features: feature maps per layer
+        """
+        super(Features4Layer, self).__init__()
+        self.act = activation
+
+        self.pad1 = nn.ReflectionPad2d(2)
+        self.conv1 = nn.Conv2d(1, features, 5, stride=1, padding=0)
+
+        self.pad2 = nn.ReflectionPad2d(1)
+        self.conv2 = nn.Conv2d(features, features, 3, stride=1, padding=0)
+        self.bn2 = nn.BatchNorm2d(features)
+
+        self.pad3 = nn.ReflectionPad2d(1)
+        self.conv3 = nn.Conv2d(features, features, 3, stride=1, padding=0)
+        self.bn3 = nn.BatchNorm2d(features)
+
+        self.pad4 = nn.ReflectionPad2d(1)
+        self.conv4 = nn.Conv2d(features, features, 3, stride=1, padding=0)
+
+    def forward(self, frame):
+        feature1 = self.act(self.conv1(self.pad1(frame)))
+        feature2 = self.act(self.bn2(self.conv2(self.pad2(feature1))))
+        feature3 = self.act(self.bn3(self.conv3(self.pad3(feature2))))
+        return self.act(self.conv4(self.pad4(feature3)))
+
+
+class Features3Layer(nn.Module):
+    """
+    Basic feature extractor, 4 layer version
+    """
+    def __init__(self, features=64, activation=swish):
+        """
+        :param frame: The input frame image
+        :param features: feature maps per layer
+        """
+        super(Features3Layer, self).__init__()
+        self.act = activation
+
+        self.pad1 = nn.ReflectionPad2d(2)
+        self.conv1 = nn.Conv2d(1, features, 5, stride=1, padding=0)
+
+        self.pad2 = nn.ReflectionPad2d(1)
+        self.conv2 = nn.Conv2d(features, features, 3, stride=1, padding=0)
+        self.bn2 = nn.BatchNorm2d(features)
+
+        self.pad3 = nn.ReflectionPad2d(1)
+        self.conv3 = nn.Conv2d(features, features, 3, stride=1, padding=0)
+
+    def forward(self, frame):
+        feature1 = self.act(self.conv1(self.pad1(frame)))
+        feature2 = self.act(self.bn2(self.conv2(self.pad2(feature1))))
+        return self.act(self.conv3(self.pad3(feature2)))
+
+
+class LateUpsamplingBlock(nn.Module):
+    """
+    this is another up-sample block
+    |------------------------------|
+    |           features           |
+    |------------------------------|
+    |   n   |   residual blocks    |
+    |------------------------------|
+    | Pixel shuffle up-sampling x2 |
+    |------------------------------|
+    """
+    def __init__(self, features=64, n_res_block=3):
+        """
+        :param features: number of feature maps input
+        :param n_res_block: number of residual blocks
+        """
+        super(LateUpsamplingBlock, self).__init__()
+        self.n_residual_blocks = n_res_block
+
+        for i in range(self.n_residual_blocks):
+            self.add_module('residual_block' + str(i + 1), residualBlock(features))
+
+        self.upsample = upsampleBlock(features, features * 4)
+
+    def forward(self, features):
+        for i in range(self.n_residual_blocks):
+            features = self.__getattr__('residual_block' + str(i + 1))(features)
+        return self.upsample(features)
+

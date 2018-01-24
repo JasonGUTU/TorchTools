@@ -142,6 +142,14 @@ class SRDataLarge(data.Dataset):
         else:
             return Func.to_tensor(lr_img), Func.to_tensor(hr_img)
 
+# TODO: SRDataLargeGrid(data.Dataset)
+# class SRDataLargeGrid(data.Dataset):
+#     """
+#     DataSet for Large images, hard to read once
+#     need buffer
+#     need to crop, but crop by grid
+#     all the image are Big size (DIV2K for example)
+#     """
 
 
 
