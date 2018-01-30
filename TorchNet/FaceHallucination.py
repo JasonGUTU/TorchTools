@@ -49,7 +49,7 @@ class MaxActivationFusion(nn.Module):
         frame_5_feature = frame_5_feature.view((1, ) + frame_5_feature.size())
 
         cat = torch.cat((frame_1_feature, frame_2_feature, frame_3_feature, frame_4_feature, frame_5_feature), dim=0)
-        return torch.max(cat, 0)
+        return torch.max(cat, 0)[0]
 
 
 class EaryFusion(nn.Module):
@@ -105,7 +105,7 @@ class HallucinationOrigin(nn.Module):
     |              Tanh               |
     |---------------------------------|
     """
-    def __init__(self, scala, features=64, n_residual_blocks=9, big_short_connect=False, output_channel=1):
+    def __init__(self, scala=8, features=64, n_residual_blocks=9, big_short_connect=False, output_channel=1):
         """
         :param scala: scala factor
         :param n_residual_blocks: The number of residual blocks
@@ -155,7 +155,7 @@ class StepHallucinationNet(nn.Module):
     |       Convolution and Tanh        |
     |-----------------------------------|
     """
-    def __init__(self, scala, features=64, little_res_blocks=3, output_channel=1):
+    def __init__(self, scala=8, features=64, little_res_blocks=3, output_channel=1):
         """
 
         :param scala: scala factor
