@@ -156,7 +156,7 @@ class SRDataLarge(data.Dataset):
 #     """
 
 
-class FaceHallucinationData(data.Dataset):
+class VideoData(data.Dataset):
     """
     Data Store Format:
 
@@ -174,7 +174,7 @@ class FaceHallucinationData(data.Dataset):
             |-Video Frames (images)
     """
     def __init__(self, data_folder_root, scala, image_size_w, image_size_h, time_window=5, time_stride=2, loader=pil_loader, interp=Image.BICUBIC):
-        super(FaceHallucinationData, self). __init__()
+        super(VideoData, self). __init__()
         self.time_window = time_window
         self.time_stride = time_stride
         self.loader = loader
@@ -293,5 +293,55 @@ class FaceDetectorData(data.Dataset):
 
     def __len__(self):
         return len(self.image_file_list)
+
+
+class OpticalFlowData(data.Dataset):
+    """
+    This Dataset is for training optical flow
+    """
+    def __init__(self, path, stride=2, mode='YCbCr'):
+        """
+        :param path:
+        :param stride: 1 or 2
+        """
+        self.stride = stride
+        self.mode = mode
+        self.video_frame_list = _video_image_file(path)
+        self.num_videos = len(self.video_frame_list)
+        self.num_frames = [0] * self.num_videos
+        for i, video in enumerate(self.video_frame_list):
+            self.num_frames[i] = len(video)
+        self.num_samples = [0] * self.num_videos
+        for i, frames in enumerate(self.num_frames):
+            self.num_samples[i] = frames // stride
+        self.area_summed = [0] * self.num_videos
+        for i, frames in enumerate(self.num_samples):
+            if i != 0:
+                self.area_summed[i] = sum(self.num_samples[:i])
+
+    def _index_parser(self, index):
+        global_sample_index = index
+        for i in range(self.num_videos):
+            if self.area_summed[i] > global_sample_index:
+                video_index = i - 1
+                frame_index = global_sample_index - self.area_summed[video_index]
+                return video_index, frame_index
+        video_index = self.num_videos - 1
+        frame_index = global_sample_index - self.area_summed[video_index]
+        return video_index, frame_index
+
+    def _load_frames(self, video_index, sample_index):
+        frame_t = pil_loader(self.video_frame_list[video_index][sample_index * self.stride], mode=self.mode)
+        frame_tp1 = pil_loader(self.video_frame_list[video_index][sample_index * self.stride + 1], mode=self.mode)
+        return Func.to_tensor(frame_t)[:1], Func.to_tensor(frame_tp1)[:1]
+
+    def __getitem__(self, index):
+        video_index, frame_index = self._index_parser(index)
+        return self._load_frames(video_index, frame_index)
+
+    def __len__(self):
+        return sum(self.num_samples)
+
+
 
 
