@@ -2,6 +2,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from ..DataTools.Loaders import _add_batch_one
+
 
 class Pad67to68(nn.Module):
     def __init__(self):
@@ -44,7 +46,7 @@ class _CoarseFlow(nn.Module):
     def forward(self, frame_t, frame_tp1):
         input = torch.cat([frame_t, frame_tp1], dim=1)
         return self.pix(
-            F.tanh(self.conv5(
+            self.conv5(
                 F.relu(self.conv4(
                     F.relu(self.conv3(
                         F.relu(self.conv2(
@@ -52,7 +54,7 @@ class _CoarseFlow(nn.Module):
                         ))
                     ))
                 ))
-            ))
+            )
         )
 
 
@@ -88,7 +90,7 @@ class _FineFlow(nn.Module):
     def forward(self, frame_t, frame_tp1, flow, coarse_frame_tp1):
         input = torch.cat([frame_t, frame_tp1, flow, coarse_frame_tp1], dim=1)
         return self.pix(
-            F.tanh(self.conv5(
+            self.conv5(
                 F.relu(self.conv4(
                     F.relu(self.conv3(
                         F.relu(self.conv2(
@@ -96,20 +98,17 @@ class _FineFlow(nn.Module):
                         ))
                     ))
                 ))
-            ))
+            )
         )
 
 
 class Warp(nn.Module):
     """
-    Warp new frame using flow field
-    Given an input and a flow-field grid, computes the output using input pixel locations from the grid.
-    Uses bilinear interpolation to sample the input pixels. Currently, only spatial (4 dimensional) inputs are supported.
-    For each output location, grid has x and y input pixel locations which are used to compute output.
-    flow field has values in the range of [-1, 1]. This is because the pixel locations are normalized by the input height and width.
+    Warp Using Optical Flow
     """
     def __init__(self):
         super(Warp, self).__init__()
+        self.std_theta = _add_batch_one(torch.eye(2, 3))
 
     def forward(self, frame_t, flow_field):
         """
@@ -117,7 +116,11 @@ class Warp(nn.Module):
         :param flow_field: flow_field with shape(N x 2 x OH x OW)
         :return: output Tensor
         """
-        return F.grid_sample(frame_t, flow_field.permute([0, 2, 3, 1]))
+        N, C, H, W = frame_t.size()
+        std = F.affine_grid(self.std_theta, frame_t.size()).cuda()
+        flow_field[:, 0, :, :] = flow_field[:, 0, :, :] / W
+        flow_field[:, 1, :, :] = flow_field[:, 1, :, :] / H
+        return F.grid_sample(frame_t, std + flow_field.permute([0, 2, 3, 1]))
 
 
 class FlowField(nn.Module):
