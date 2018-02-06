@@ -7,7 +7,7 @@ except ImportError:
 
 import torch
 
-from Functions.functional import to_tensor
+from .functional import to_tensor
 
 
 def mse(x, y):
