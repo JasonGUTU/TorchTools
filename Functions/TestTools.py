@@ -5,6 +5,7 @@ import skimage.io as io
 from scipy import misc
 
 import torch
+from torch.autograd import Variable
 
 
 RY = 15
@@ -28,6 +29,51 @@ RIGHT_MOST = [14, 15, 16]
 TOP_MOST = [18, 19, 20, 23, 24, 25]
 DOWN_MOST = [7, 8, 9]
 NOSE_TIP = [31, 32, 33, 34, 35]
+
+
+def _id(x):
+    """
+    return x
+    :param x:
+    :return:
+    """
+    return x
+
+
+def _add_batch_one(tensor):
+    """
+    Return a tensor with size (1, ) + tensor.size
+    :param tensor: 2D or 3D tensor
+    :return: 3D or 4D tensor
+    """
+    return tensor.view((1, ) + tensor.size())
+
+
+def _remove_batch(tensor):
+    """
+    Return a tensor with size tensor.size()[1:]
+    :param tensor: 3D or 4D tensor
+    :return: 2D or 3D tensor
+    """
+    return tensor.view(tensor.size()[1:])
+
+
+def _sigmoid_to_tanh(x):
+    """
+    range [0, 1] to range [-1, 1]
+    :param x: tensor type
+    :return: tensor
+    """
+    return (x - 0.5) * 2.
+
+
+def _tanh_to_sigmoid(x):
+    """
+    range [-1, 1] to range [0, 1]
+    :param x:
+    :return:
+    """
+    return x * 0.5 + 0.5
 
 
 def generat_detection_label(point_set, size_w, size_h):
@@ -58,8 +104,46 @@ def high_point_to_low_point(point_set, size_h, size_l):
     lr_points = list()
     for point in point_set:
         x, y = point
-        lr_points.append([round(x * (l_1 / h_1)), round(y * (l_2 / h_2))])
-    return lr_points
+        lr_points.append([int(round(x * (l_1 / h_1))), int(round(y * (l_2 / h_2)))])
+    return np.array(lr_points)
+
+
+def _center_point(point_1, point_2):
+    return (np.array(point_1, dtype=np.float32) + np.array(point_2, dtype=np.float32)) // 2
+
+
+def _euclid_distance(point_1, point_2):
+    return np.sqrt(np.sum((point_1 - point_2) ** 2))
+
+
+def five_face_landmarks_bounding(left_eye, right_eye, nose, left_mouth, right_mouth):
+    top = _center_point(left_eye, right_eye)
+    down = _center_point(left_mouth, right_mouth)
+    return _euclid_distance(top, down)
+
+
+def _angle_point(center, point_1, point_2):
+    a = _euclid_distance(point_1, point_2)
+    b = _euclid_distance(center, point_2)
+    c = _euclid_distance(center, point_1)
+    return np.arccos((b ** 2 + c ** 2 - a ** 2) / (2 * b * c))
+
+
+def _rotate_affine_matrix(center, theta, high):
+    """
+    :param center: rotate center
+    :param theta: clock wise, rad
+    :return:
+    """
+    x, y = center
+    # y = high - y_p
+    sin = np.sin(theta)
+    cos = np.cos(theta)
+    matrix = np.array(
+        [[cos, -sin, x - x * cos + y * sin],
+         [sin, cos, y - x * sin - y * cos]]
+    )
+    return torch.from_numpy(matrix)
 
 
 def get_landmarks(img, detector, predictor):
@@ -88,6 +172,12 @@ def _centroid(landmarks, point_list):
     x_mean = int(x.mean())
     y_mean = int(y.mean())
     return np.array([x_mean, y_mean])
+
+
+def center_face(five_points):
+    eye_center = _center_point(five_points[0], five_points[1])
+    mouth_center = _center_point(five_points[3], five_points[4])
+    return _center_point(eye_center, mouth_center)
 
 
 def landmark_6(landmarks):

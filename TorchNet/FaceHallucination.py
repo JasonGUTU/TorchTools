@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.nn.functional import relu
 
 try:
     from math import log2
@@ -13,14 +14,12 @@ from .modules import Features4Layer, Features3Layer, residualBlock, upsampleBloc
 from .activation import swish
 
 
-
-
 class MaxActivationFusion(nn.Module):
     """
     model implementation of the Maximum-activation Detail Fusion
     This is not a complete SR model, just **Fusion Part**
     """
-    def __init__(self, features=64, feature_extractor=Features4Layer, activation=swish):
+    def __init__(self, features=64, feature_extractor=Features4Layer, activation=relu):
         """
         :param features: the number of final feature maps
         """
@@ -52,12 +51,79 @@ class MaxActivationFusion(nn.Module):
         return torch.max(cat, 0)[0]
 
 
-class EaryFusion(nn.Module):
+class MeanActivationFusion(nn.Module):
     """
-    model implementation of the Maximum-activation Detail Fusion
+    model implementation of the Mean-activation Detail Fusion
     This is not a complete SR model, just **Fusion Part**
     """
-    def __init__(self, features=64, feature_extractor=Features3Layer, activation=swish):
+    def __init__(self, features=64, feature_extractor=Features4Layer, activation=relu):
+        """
+        :param features: the number of final feature maps
+        """
+        super(MeanActivationFusion, self).__init__()
+        self.features = feature_extractor(features, activation=activation)
+
+    def forward(self, frame_1, frame_2, frame_3, frame_4, frame_5):
+        """
+        :param frame_1: frame t-2
+        :param frame_2: frame t-1
+        :param frame_3: frame t
+        :param frame_4: frame t+1
+        :param frame_5: frame t+2
+        :return: features
+        """
+        frame_1_feature = self.features(frame_1)
+        frame_2_feature = self.features(frame_2)
+        frame_3_feature = self.features(frame_3)
+        frame_4_feature = self.features(frame_4)
+        frame_5_feature = self.features(frame_5)
+
+        frame_1_feature = frame_1_feature.view((1, ) + frame_1_feature.size())
+        frame_2_feature = frame_2_feature.view((1, ) + frame_2_feature.size())
+        frame_3_feature = frame_3_feature.view((1, ) + frame_3_feature.size())
+        frame_4_feature = frame_4_feature.view((1, ) + frame_4_feature.size())
+        frame_5_feature = frame_5_feature.view((1, ) + frame_5_feature.size())
+
+        cat = torch.cat((frame_1_feature, frame_2_feature, frame_3_feature, frame_4_feature, frame_5_feature), dim=0)
+        return torch.mean(cat, 0)
+
+
+class EarlyMean(nn.Module):
+    """
+    model implementation of the Early Mean Fusion
+    This is not a complete SR model, just **Fusion Part**
+    """
+    def __init__(self, features=64, feature_extractor=Features4Layer, activation=relu):
+        """
+        :param features: the number of final feature maps
+        """
+        super(EarlyMean, self).__init__()
+        self.features = feature_extractor(features, activation=activation)
+
+    def forward(self, frame_1, frame_2, frame_3, frame_4, frame_5):
+        """
+        :param frame_1: frame t-2
+        :param frame_2: frame t-1
+        :param frame_3: frame t
+        :param frame_4: frame t+1
+        :param frame_5: frame t+2
+        :return: features
+        """
+        frame_1 = frame_1.view((1, ) + frame_1.size())
+        frame_2 = frame_2.view((1, ) + frame_2.size())
+        frame_3 = frame_3.view((1, ) + frame_3.size())
+        frame_4 = frame_4.view((1, ) + frame_4.size())
+        frame_5 = frame_5.view((1, ) + frame_5.size())
+        frames_mean = torch.mean(torch.cat((frame_1, frame_2, frame_3, frame_4, frame_5), dim=0), 0)
+        return self.features(frames_mean)
+
+
+class EaryFusion(nn.Module):
+    """
+    model implementation of the Early Fusion
+    This is not a complete SR model, just **Fusion Part**
+    """
+    def __init__(self, features=64, feature_extractor=Features3Layer, activation=relu):
         """
         :param features: the number of final feature maps
         """
@@ -157,7 +223,6 @@ class StepHallucinationNet(nn.Module):
     """
     def __init__(self, scala=8, features=64, little_res_blocks=3, output_channel=1):
         """
-
         :param scala: scala factor
         :param features:
         :param little_res_blocks: The number of residual blocks in every late upsample blocks
@@ -180,14 +245,67 @@ class StepHallucinationNet(nn.Module):
         return F.tanh(self.conv(self.pad(features)))
 
 
+class FusionModel(nn.Module):
+    """
+    The Multi-frame face hallucination model
+    """
+    def __init__(self, scala=8, fusion='mdf', upsample='org'):
+        """
+        :param fusion: 'mdf'=MaxActivationFusion,
+                       'early'=EaryFusion,
+                       'mef'=MeanActivationFusion,
+                       'earlyMean'=EarlyMean
+        :param upsample: 'org'=HallucinationOrigin,
+                         'step'=StepHallucinationNet
+        """
+        super(FusionModel, self).__init__()
+        if fusion == 'mdf':
+            self.features = MaxActivationFusion()
+        elif fusion == 'early':
+            self.features = EaryFusion()
+        elif fusion == 'mef':
+            self.features = MeanActivationFusion()
+        elif fusion == 'earlyMean':
+            self.features = EarlyMean()
+        else:
+            raise Exception('Wrong Parameter: fusion')
+
+        if upsample == 'org':
+            self.upsample = HallucinationOrigin(scala=scala)
+        elif upsample == 'step':
+            self.upsample = StepHallucinationNet(scala=scala)
+        else:
+            raise Exception('Wrong Parameter: upsample')
+
+    def forward(self, frame_1, frame_2, frame_3, frame_4, frame_5):
+        return self.upsample(self.features(frame_1, frame_2, frame_3, frame_4, frame_5))
 
 
+class SingleImageBaseline(nn.Module):
+    """
+    Single Image Baseline
+    """
+    def __init__(self, scala=8, feature='f3', upsample='org'):
+        """
+        :param feature: 'f3'=Features3Layer
+                        'f4'=Features4Layer
+        :param upsample: 'org'=HallucinationOrigin,
+                         'step'=StepHallucinationNet
+        """
+        super(SingleImageBaseline, self).__init__()
+        if feature == 'f3':
+            self.features = Features3Layer()
+        elif feature == 'f4':
+            self.features = Features4Layer()
+        else:
+            raise Exception('Wrong Parameter: feature')
 
+        if upsample == 'org':
+            self.upsample = HallucinationOrigin(scala=scala)
+        elif upsample == 'step':
+            self.upsample = StepHallucinationNet(scala=scala)
+        else:
+            raise Exception('Wrong Parameter: upsample')
 
-
-
-
-
-
-
-
+    def forward(self, frame):
+        return self.upsample(self.features(frame))

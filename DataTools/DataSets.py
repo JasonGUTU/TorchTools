@@ -343,5 +343,6 @@ class OpticalFlowData(data.Dataset):
         return sum(self.num_samples)
 
 
-
+class VideoFaceSRData(data.Dataset):
+    pass
 

@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.nn.functional import relu
 
 from .activation import swish
 
@@ -17,7 +18,7 @@ class FeatureExtractor(nn.Module):
 
 class residualBlock(nn.Module):
 
-    def __init__(self, in_channels=64, kernel=3, mid_channels=64, out_channels=64, stride=1, activation=swish):
+    def __init__(self, in_channels=64, kernel=3, mid_channels=64, out_channels=64, stride=1, activation=relu):
         super(residualBlock, self).__init__()
         self.act = activation
         self.pad1 = nn.ReflectionPad2d((kernel // 2))
@@ -34,7 +35,7 @@ class residualBlock(nn.Module):
 
 class upsampleBlock(nn.Module):
 
-    def __init__(self, in_channels, out_channels, activation=swish):
+    def __init__(self, in_channels, out_channels, activation=relu):
         super(upsampleBlock, self).__init__()
         self.act = activation
         self.pad = nn.ReflectionPad2d(1)
@@ -47,7 +48,7 @@ class upsampleBlock(nn.Module):
 
 class deconvUpsampleBlock(nn.Module):
 
-    def __init__(self, in_channels, mid_channels, out_channels, kernel_1=5, kernel_2=3, activation=swish):
+    def __init__(self, in_channels, mid_channels, out_channels, kernel_1=5, kernel_2=3, activation=relu):
         self.act = activation
         super(deconvUpsampleBlock, self).__init__()
         self.deconv_1 = nn.ConvTranspose2d(in_channels=in_channels, out_channels=mid_channels, kernel_size=kernel_1, stride=2, padding=kernel_1 // 2)
@@ -61,7 +62,7 @@ class Features4Layer(nn.Module):
     """
     Basic feature extractor, 4 layer version
     """
-    def __init__(self, features=64, activation=swish):
+    def __init__(self, features=64, activation=relu):
         """
         :param frame: The input frame image
         :param features: feature maps per layer
@@ -84,17 +85,20 @@ class Features4Layer(nn.Module):
         self.conv4 = nn.Conv2d(features, features, 3, stride=1, padding=0)
 
     def forward(self, frame):
-        feature1 = self.act(self.conv1(self.pad1(frame)))
-        feature2 = self.act(self.bn2(self.conv2(self.pad2(feature1))))
-        feature3 = self.act(self.bn3(self.conv3(self.pad3(feature2))))
-        return self.act(self.conv4(self.pad4(feature3)))
+        return self.act(self.conv4(self.pad4(
+            self.act(self.bn3(self.conv3(self.pad3(
+                self.act(self.bn2(self.conv2(self.pad2(
+                    self.act(self.conv1(self.pad1(frame)))
+                ))))
+            ))))
+        )))
 
 
 class Features3Layer(nn.Module):
     """
     Basic feature extractor, 4 layer version
     """
-    def __init__(self, features=64, activation=swish):
+    def __init__(self, features=64, activation=relu):
         """
         :param frame: The input frame image
         :param features: feature maps per layer
@@ -113,14 +117,16 @@ class Features3Layer(nn.Module):
         self.conv3 = nn.Conv2d(features, features, 3, stride=1, padding=0)
 
     def forward(self, frame):
-        feature1 = self.act(self.conv1(self.pad1(frame)))
-        feature2 = self.act(self.bn2(self.conv2(self.pad2(feature1))))
-        return self.act(self.conv3(self.pad3(feature2)))
+        return self.act(self.conv3(self.pad3(
+            self.act(self.bn2(self.conv2(self.pad2(
+                self.act(self.conv1(self.pad1(frame)))
+            ))))
+        )))
 
 
 class LateUpsamplingBlock(nn.Module):
     """
-    this is another up-sample block
+    this is another up-sample block for step upsample
     |------------------------------|
     |           features           |
     |------------------------------|

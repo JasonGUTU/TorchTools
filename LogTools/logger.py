@@ -3,6 +3,28 @@ from collections import OrderedDict
 import torch
 
 
+class _FileLogger(object):
+    """Logger for losses files"""
+    def __init__(self, logger, log_name, title_list):
+        """
+        Init a new log term
+        :param log_name: The name of the log
+        :param title_list: list, titles to store
+        :return:
+        """
+        assert isinstance(logger, Logger), "logger should be instance of Logger"
+        self.titles = title_list
+        self.len = len(title_list)
+        self.log_file_name = os.path.join(logger.log_dir, log_name + '.csv')
+        with open(self.log_file_name, 'w') as f:
+            f.write(','.join(title_list) + '\n')
+
+    def add_log(self, value_list):
+        assert len(value_list) == self.len, "Log Value doesn't match"
+        with open(self.log_file_name, 'a') as f:
+            f.write(','.join(value_list) + '\n')
+
+
 class Logger(object):
     """Logger for easy log the training process."""
     def __init__(self, name, exp_dir, opt, log_dir='log', checkpoint_dir='checkpoint', sample='samples'):
@@ -22,19 +44,17 @@ class Logger(object):
         self.checkpoint_dir = os.path.join(self.exp_dir, checkpoint_dir)
         self.opt = opt
         try:
-            print('Creating: %s\n          %s\n          %s\n          %s' % (self.exp_dir, self.log_dir, self.sample, self.checkpoint_dir))
             os.mkdir(self.exp_dir)
             os.mkdir(self.log_dir)
             os.mkdir(self.checkpoint_dir)
             os.mkdir(self.sample)
+            print('Creating: %s\n          %s\n          %s\n          %s' % (self.exp_dir, self.log_dir, self.sample, self.checkpoint_dir))
         except NotImplementedError:
             raise Exception('Check your dir.')
         except FileExistsError:
             pass
 
         self._parse()
-        self.log_dict = OrderedDict()
-        self.log_titles = OrderedDict()
 
     def _parse(self):
         """
@@ -63,22 +83,7 @@ class Logger(object):
         :param title_list: list, titles to store
         :return:
         """
-        self.log_titles[log_name] = title_list
-        log_file_name = os.path.join(self.log_dir, log_name + '.csv')
-        self.log_dict[log_name] = log_file_name
-        with open(log_file_name, 'w') as f:
-            f.write(','.join(title_list) + '\n')
-
-    def add_log(self, name, args):
-        """
-        Add record to log `name`
-        :param name: name of log to add
-        :param args: list, according to the title
-        :return:
-        """
-        assert len(self.log_titles[name]) == len(args), 'Bad log input.'
-        with open(self.log_dict[name], 'a') as f:
-            f.write(','.join(args) + '\n')
+        return _FileLogger(self, log_name, title_list)
 
     def save(self, name, state_dict):
         """
@@ -88,11 +93,3 @@ class Logger(object):
         :return:
         """
         torch.save(state_dict, os.path.join(self.checkpoint_dir, name))
-
-
-
-
-
-
-
-

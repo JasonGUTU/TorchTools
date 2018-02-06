@@ -4,7 +4,7 @@ require 'optim'
 
 —- modify the path 
 
-prototxt = '/home/fanq15/convert_caffe_to_pytorch/deploy_vgg16.prototxt'
+prototxt = 'MTCNNv1/model/'
 binary = '/home/fanq15/pconvert_caffe_to_pytorch/vgg16.caffemodel'
 
 net = loadcaffe.load(prototxt, binary, 'cudnn')

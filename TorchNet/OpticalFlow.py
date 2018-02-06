@@ -1,3 +1,5 @@
+import numpy as np
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -108,7 +110,7 @@ class Warp(nn.Module):
     """
     def __init__(self):
         super(Warp, self).__init__()
-        self.std_theta = _add_batch_one(torch.eye(2, 3))
+        self.std_theta = np.eye(2, 3, dtype=np.float32).reshape((1, 2, 3))
 
     def forward(self, frame_t, flow_field):
         """
@@ -117,7 +119,11 @@ class Warp(nn.Module):
         :return: output Tensor
         """
         N, C, H, W = frame_t.size()
-        std = F.affine_grid(self.std_theta, frame_t.size()).cuda()
+        std_theta = torch.from_numpy(np.repeat(self.std_theta, N, axis=0))
+        if isinstance(frame_t.data, torch.cuda.FloatTensor):
+            std = F.affine_grid(std_theta, frame_t.size()).cuda()
+        else:
+            std = F.affine_grid(std_theta, frame_t.size())
         flow_field[:, 0, :, :] = flow_field[:, 0, :, :] / W
         flow_field[:, 1, :, :] = flow_field[:, 1, :, :] / H
         return F.grid_sample(frame_t, std + flow_field.permute([0, 2, 3, 1]))
@@ -137,10 +143,4 @@ class FlowField(nn.Module):
         coarse_flow = self.coarse_net(frame_t, frame_tp1)
         coarse_frame_tp1 = self.warp(frame_t, coarse_flow)
         return self.fine_net(frame_t, frame_tp1, coarse_flow, coarse_frame_tp1) + coarse_flow
-
-
-
-
-
-
 

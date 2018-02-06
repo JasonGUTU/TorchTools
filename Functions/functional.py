@@ -254,6 +254,22 @@ def crop(img, i, j, h, w):
     return img.crop((j, i, j + w, i + h))
 
 
+def crop_square(img, center, length):
+    """
+    Crop a square path from img, centerd by center, line length by length
+    :param img: PIL Image
+    :param center: center location of square, Upper pixel coordinate. Left pixel coordinate.
+    :param length: line length
+    :return:
+    """
+    if not _is_pil_image(img):
+        raise TypeError('img should be PIL Image. Got {}'.format(type(img)))
+
+    diff = length // 2
+    w, h = center
+    return img.crop((w - diff, h - diff, w + diff, h + diff))
+
+
 def random_crop(img, patch_size):
     """
     Random crop patch from img
@@ -588,6 +604,10 @@ def rotate(img, angle, resample=False, expand=False, center=None):
         raise TypeError('img should be PIL Image. Got {}'.format(type(img)))
 
     return img.rotate(angle, resample, expand, center)
+
+
+def rotate_face(img, angle, center):
+    return rotate(img, angle, resample=Image.BILINEAR, expand=False, center=center)
 
 
 def to_grayscale(img, num_output_channels=1):
