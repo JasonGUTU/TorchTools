@@ -319,6 +319,40 @@ def center_crop(img, output_size):
     return crop(img, i, j, th, tw)
 
 
+def _crop_center_correspond_L2H(low_index, up_scala=8):
+    """
+    Calculate the crop center for square crop.
+    The center need to be aligned between low-resolution version and high-resolution version
+    :param low_index: list of [x, y]
+    :param up_scala: upsample scala
+    :return: list of hr center [x, y]
+    """
+    return [(low_index[0] + 1) * up_scala - 1, (low_index[1] + 1) * up_scala - 1]
+
+
+def crop_bound_correspong_L2H(low_center, lr_size=16, up_scala=8):
+    """
+    Calculate the crop bound for square crop for both lr and hr.
+    :param low_center: lr crop center
+    :param lr_size: lr crop size
+    :param up_scala: upsample scala
+    :return: tuple of teo lists, (low bound, high bound)
+    """
+    high_center = _crop_center_correspond_L2H(low_center, up_scala=up_scala)
+    hr_size = lr_size * up_scala
+    half_lr_size = lr_size // 2
+    half_hr_size = hr_size // 2
+    lr_bound = [low_center[0] - half_lr_size + 1,
+                low_center[1] - half_lr_size + 1,
+                low_center[0] + half_lr_size + 1,
+                low_center[1] + half_lr_size + 1]
+    hr_bound = [high_center[0] - half_hr_size + 1,
+                high_center[1] - half_hr_size + 1,
+                high_center[0] + half_hr_size + 1,
+                high_center[1] + half_hr_size + 1]
+    return lr_bound, hr_bound
+
+
 def resized_crop(img, i, j, h, w, size, interpolation=Image.BILINEAR):
     """Crop the given PIL Image and resize it to desired size.
 

@@ -8,7 +8,7 @@ import numpy as np
 import skimage.io as io
 import dlib
 
-from .FileTools import _image_file, _all_images, _video_image_file, _sample_from_videos_frames
+from .FileTools import _image_file, _all_images, _video_image_file, _sample_from_videos_frames, sample_info_video, video_frame_names
 from .Loaders import pil_loader, load_to_tensor
 from .Prepro import _id, random_pre_process
 
@@ -344,5 +344,44 @@ class OpticalFlowData(data.Dataset):
 
 
 class VideoFaceSRData(data.Dataset):
-    pass
 
+    def __init__(self, data_folder_root, gt_folder_root, time_window=5, time_stride=8, loader=pil_loader, mode='YCbCr'):
+        self.time_window = time_window
+        self.time_stride = time_stride
+        self.loader = loader
+        self.mode = mode
+        self.data_root = data_folder_root
+        self.gt_root = gt_folder_root
+        self.video_frames = _video_image_file(os.path.abspath(data_folder_root))
+        self.n_videos = len(self.video_frames)
+        self.samples, self.area_sum_samples = sample_info_video(self.video_frames, self.time_window, self.time_stride)
+
+    def _index_parser(self, index):
+        global_sample_index = index
+        for i in range(self.n_videos):
+            if self.area_sum_samples[i] > global_sample_index:
+                video_index = i - 1
+                frame_index = global_sample_index - self.area_sum_samples[video_index]
+                return video_index, frame_index
+        video_index = self.n_videos - 1
+        frame_index = global_sample_index - self.area_sum_samples[video_index]
+        return video_index, frame_index
+
+    def _load_frames(self, video_index, sample_index):
+        frame_file_index_start = sample_index * self.time_stride
+        frame_files = self.video_frames[video_index][frame_file_index_start: frame_file_index_start + self.time_window]
+        hr_video, hr_frame = video_frame_names(frame_files[self.time_window // 2])
+        hr_frame = os.path.join(os.path.join(self.gt_root, hr_video), hr_frame)
+        return frame_files, hr_frame
+
+    def __getitem__(self, index):
+        video_index, sample_index = self._index_parser(index)
+        load_list, hr_frame = self._load_frames(video_index, sample_index)
+        buffer = [None] * self.time_window
+        for i, frame in enumerate(load_list):
+            buffer[i] = Func.to_tensor(self.loader(frame, mode=self.mode))[:1]
+        hr = Func.to_tensor(self.loader(hr_frame, mode=self.mode))[:1]
+        return buffer, hr
+
+    def __len__(self):
+        return sum(self.samples)

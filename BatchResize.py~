@@ -34,7 +34,7 @@ def make_dir(input, output):
 def resize_and_save(file_org, output, scala):
     im = Image.open(file_org)
     w, h = im.size
-    im = resize(im, (int(h // scala), int(w // scala)))
+    im = resize(im, (h // scala, w // scala))
     name = os.path.split(file_org)
     vdir = os.path.split(name[0])
     save_name = os.path.join(output, vdir[1])

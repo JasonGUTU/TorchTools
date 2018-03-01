@@ -56,6 +56,22 @@ def _video_image_file(path):
     return frame_list
 
 
+def video_frame_names(path):
+    video, frame = os.path.split(path)
+    _, video = os.path.split(video)
+    return video, frame
+
+
+def sample_info_video(video_frames, time_window, time_stride):
+    samples = [0] * len(video_frames)
+    area_sum_samples = [0] * len(video_frames)
+    for i, video in enumerate(video_frames):
+        samples[i] = (len(video) - time_window) // time_stride
+        if i != 0:
+            area_sum_samples[i] = sum(samples[:i])
+    return samples, area_sum_samples
+
+
 def _sample_from_videos_frames(path, time_window, time_stride):
     """
     Sample from video frames files
