@@ -437,3 +437,24 @@ class CropWithTemplateMatchVideoFaceSR(VideoFaceSRData):
             buffer[i] = Func.to_tensor(self.loader(frame, mode=self.mode).crop(lr_bound))[:1]
         hr = Func.to_tensor(self.loader(hr_frame, mode=self.mode).crop(hr_bound))[:1]
         return buffer, hr
+
+
+class PreLoad_SimpleCropVideoFaceSRData(data.Dataset):
+    def __init__(self, data_folder_root, gt_folder_root, dets_dict_root, LR_size=16, scala=8, time_window=5, time_stride=7, loader=pil_loader, mode='YCbCr'):
+        super(PreLoad_SimpleCropVideoFaceSRData, self).__init__()
+        print('test')
+        self.dataset = SimpleCropVideoFaceSRData(data_folder_root, gt_folder_root, dets_dict_root, LR_size=LR_size, scala=scala, time_window=time_window, time_stride=time_stride, loader=loader, mode=mode)
+        print('test')
+        self.data = [None] * len(self.dataset)
+        print('test')
+        for i in range(len(self.dataset)):
+            self.data[i] = self.dataset[i]
+            print(i)
+
+    def __getitem__(self, item):
+        return self.data[item]
+
+    def __len__(self):
+        return len(self.data)
+
+

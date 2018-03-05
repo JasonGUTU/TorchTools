@@ -130,7 +130,7 @@ class EaryFusion(nn.Module):
         super(EaryFusion, self).__init__()
         self.act = activation
         self.features = feature_extractor(features, activation=activation)
-        self.conv = nn.Conv2d(features * 5, features, 1, stride=1, padding=0)
+        self.conv = nn.Conv2d(features * 5, features, 3, stride=1, padding=1)
 
     def forward(self, frame_1, frame_2, frame_3, frame_4, frame_5):
         """
