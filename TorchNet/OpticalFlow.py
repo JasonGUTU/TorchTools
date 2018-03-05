@@ -144,3 +144,100 @@ class FlowField(nn.Module):
         coarse_frame_tp1 = self.warp(frame_t, coarse_flow)
         return self.fine_net(frame_t, frame_tp1, coarse_flow, coarse_frame_tp1) + coarse_flow
 
+
+class _CoarseFlowNoStride(nn.Module):
+    """
+    Coarse Flow Network in MCT without Stride
+    |----------------------|
+    |    Input two frame   |
+    |----------------------|
+    | Conv k5-n32-s1, ReLu |
+    |----------------------|
+    | Conv k3-n32-s1, ReLu |
+    |----------------------|
+    | Conv k5-n32-s1, ReLu |
+    |----------------------|
+    | Conv k3-n32-s1, ReLu |
+    |----------------------|
+    | Conv k3-n32-s1, Tanh |
+    |----------------------|
+    |   Pixel Shuffle x4   |
+    |----------------------|
+    """
+    def __init__(self, input_channel=1):
+        super(_CoarseFlowNoStride, self).__init__()
+        self.channel = input_channel
+        self.conv1 = nn.Conv2d(input_channel * 2, 24, 5, stride=1, padding=2)
+        self.conv2 = nn.Conv2d(24, 24, 3, stride=1, padding=1)
+        self.conv3 = nn.Conv2d(24, 24, 5, stride=1, padding=2)
+        self.conv4 = nn.Conv2d(24, 24, 3, stride=1, padding=1)
+        self.conv5 = nn.Conv2d(24, 2, 3, stride=1, padding=1)
+
+    def forward(self, frame_t, frame_tp1):
+        input = torch.cat([frame_t, frame_tp1], dim=1)
+        return self.conv5(
+                F.relu(self.conv4(
+                    F.relu(self.conv3(
+                        F.relu(self.conv2(
+                            F.relu(self.conv1(input))
+                        ))
+                    ))
+                ))
+            )
+
+
+class _FineFlowNoStride(nn.Module):
+    """
+    Fine Flow Network in MCT without Stride
+    |----------------------|
+    |    Input two frame   |
+    |----------------------|
+    | Conv k5-n24-s1, ReLu |
+    |----------------------|
+    | Conv k3-n24-s1, ReLu |
+    |----------------------|
+    | Conv k3-n24-s1, ReLu |
+    |----------------------|
+    | Conv k3-n24-s1, ReLu |
+    |----------------------|
+    |  Conv k3-n8-s1, Tanh |
+    |----------------------|
+    |   Pixel Shuffle x2   |
+    |----------------------|
+    """
+    def __init__(self, input_channel=1):
+        super(_FineFlowNoStride, self).__init__()
+        self.channel = input_channel
+        self.conv1 = nn.Conv2d(input_channel * 3 + 2, 24, 5, stride=1, padding=2)
+        self.conv2 = nn.Conv2d(24, 24, 3, stride=1, padding=1)
+        self.conv3 = nn.Conv2d(24, 24, 3, stride=1, padding=1)
+        self.conv4 = nn.Conv2d(24, 24, 3, stride=1, padding=1)
+        self.conv5 = nn.Conv2d(24, 2, 3, stride=1, padding=1)
+
+    def forward(self, frame_t, frame_tp1, flow, coarse_frame_tp1):
+        input = torch.cat([frame_t, frame_tp1, flow, coarse_frame_tp1], dim=1)
+        return self.conv5(
+                F.relu(self.conv4(
+                    F.relu(self.conv3(
+                        F.relu(self.conv2(
+                            F.relu(self.conv1(input))
+                        ))
+                    ))
+                ))
+            )
+
+
+class FaceFlow(nn.Module):
+    """
+    The final Fine Flow
+    """
+    def __init__(self):
+        super(FaceFlow, self).__init__()
+        self.coarse_net = _CoarseFlowNoStride()
+        self.fine_net = _FineFlowNoStride()
+        self.warp = Warp()
+
+    def forward(self, frame_t, frame_tp1):
+        coarse_flow = self.coarse_net(frame_t, frame_tp1)
+        coarse_frame_tp1 = self.warp(frame_t, coarse_flow)
+        return self.fine_net(frame_t, frame_tp1, coarse_flow, coarse_frame_tp1) + coarse_flow

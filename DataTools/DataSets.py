@@ -2,11 +2,13 @@ import torch.utils.data as data
 import torchvision.transforms as transforms
 
 from PIL import Image
-import os, random
+import os, random, json
 import os.path
 import numpy as np
 import skimage.io as io
-import dlib
+# import dlib
+
+import torch
 
 from .FileTools import _image_file, _all_images, _video_image_file, _sample_from_videos_frames, sample_info_video, video_frame_names
 from .Loaders import pil_loader, load_to_tensor
@@ -266,33 +268,33 @@ class VideoData(data.Dataset):
         return sum(self.n_samples)
 
 
-class FaceDetectorData(data.Dataset):
-    """
-    This data set is for training face detector
-    """
-    def __init__(self, image_folder, image_size=(960, 540), lr_image_size=(120, 67), dlib_predictor='/home/sensetime/Documents/shape_predictor_68_face_landmarks.dat'):
-        """
-        :param image_folder: the hr image folder
-        :param image_size: w, h
-        :param lr_image_size: w, h
-        :param dlib_predictor:
-        """
-        self.detector = dlib.get_frontal_face_detector()
-        self.predictor = dlib.shape_predictor(dlib_predictor)
-        self.image_file_list = _all_images(image_folder)
-        self.l_size = lr_image_size
-        self.l_w, self.l_h = lr_image_size
-        self.h_size = image_size
-
-    def __getitem__(self, index):
-        file_path = self.image_file_list[index]
-        points_hr = face_detection_5marks(file_path, self.detector, self.predictor)
-        points_on_lr = high_point_to_low_point(points_hr, self.h_size, self.l_size)
-        lr_image = Func.to_tensor(Func.resize(pil_loader(file_path, mode='YCbCr'), (self.l_h, self.l_w)))[0]
-        return lr_image, generat_detection_label(points_on_lr, self.l_w, self.l_h)
-
-    def __len__(self):
-        return len(self.image_file_list)
+# class FaceDetectorData(data.Dataset):
+#     """
+#     This data set is for training face detector
+#     """
+#     def __init__(self, image_folder, image_size=(960, 540), lr_image_size=(120, 67), dlib_predictor='/home/sensetime/Documents/shape_predictor_68_face_landmarks.dat'):
+#         """
+#         :param image_folder: the hr image folder
+#         :param image_size: w, h
+#         :param lr_image_size: w, h
+#         :param dlib_predictor:
+#         """
+#         self.detector = dlib.get_frontal_face_detector()
+#         self.predictor = dlib.shape_predictor(dlib_predictor)
+#         self.image_file_list = _all_images(image_folder)
+#         self.l_size = lr_image_size
+#         self.l_w, self.l_h = lr_image_size
+#         self.h_size = image_size
+#
+#     def __getitem__(self, index):
+#         file_path = self.image_file_list[index]
+#         points_hr = face_detection_5marks(file_path, self.detector, self.predictor)
+#         points_on_lr = high_point_to_low_point(points_hr, self.h_size, self.l_size)
+#         lr_image = Func.to_tensor(Func.resize(pil_loader(file_path, mode='YCbCr'), (self.l_h, self.l_w)))[0]
+#         return lr_image, generat_detection_label(points_on_lr, self.l_w, self.l_h)
+#
+#     def __len__(self):
+#         return len(self.image_file_list)
 
 
 class OpticalFlowData(data.Dataset):
@@ -385,3 +387,53 @@ class VideoFaceSRData(data.Dataset):
 
     def __len__(self):
         return sum(self.samples)
+
+
+class SimpleCropVideoFaceSRData(VideoFaceSRData):
+
+    def __init__(self, data_folder_root, gt_folder_root, dets_dict_root, LR_size=16, scala=8, time_window=5, time_stride=7, loader=pil_loader, mode='YCbCr'):
+        super(SimpleCropVideoFaceSRData, self).__init__(data_folder_root, gt_folder_root, time_window=time_window, time_stride=time_stride, loader=loader, mode=mode)
+        with open(dets_dict_root, 'r') as f:
+            self.det16 = json.load(f)
+        self.lr_size = LR_size
+        self.scala = scala
+
+    def __getitem__(self, index):
+        video_index, sample_index = self._index_parser(index)
+        load_list, hr_frame = self._load_frames(video_index, sample_index)
+        buffer = [None] * self.time_window
+        video_name, frame_name = video_frame_names(hr_frame)
+        lr_bound, hr_bound = Func.crop_bound_correspong_L2H(self.det16[video_name][frame_name][5], lr_size=self.lr_size, up_scala=self.scala)
+        for i, frame in enumerate(load_list):
+            buffer[i] = Func.to_tensor(self.loader(frame, mode=self.mode).crop(lr_bound))[:1]
+        hr = Func.to_tensor(self.loader(hr_frame, mode=self.mode).crop(hr_bound))[:1]
+        return buffer, hr
+
+
+class CropWithTemplateMatchVideoFaceSR(VideoFaceSRData):
+
+    def __init__(self, data_folder_root, gt_folder_root, dets_dict_root, LR_size=16, scala=8, time_window=5, time_stride=7, loader=pil_loader, mode='YCbCr'):
+        super(CropWithTemplateMatchVideoFaceSR, self).__init__(data_folder_root, gt_folder_root, time_window=time_window, time_stride=time_stride, loader=loader, mode=mode)
+        with open(dets_dict_root, 'r') as f:
+            self.det16 = json.load(f)
+        self.lr_size = LR_size
+        self.scala = scala
+
+    def _match_score(self, middle_patch, ref_patch):
+        """
+        :param middle_patch: PIL.Image
+        :param ref_patch: PIL.Image
+        :return:
+        """
+        return torch.sum(Func.to_tensor(middle_patch) - Func.to_tensor(ref_patch))
+
+    def __getitem__(self, index):
+        video_index, sample_index = self._index_parser(index)
+        load_list, hr_frame = self._load_frames(video_index, sample_index)
+        buffer = [None] * self.time_window
+        video_name, frame_name = video_frame_names(hr_frame)
+        lr_bound, hr_bound = Func.crop_bound_correspong_L2H(self.det16[video_name][frame_name][5], lr_size=self.lr_size, up_scala=self.scala)
+        for i, frame in enumerate(load_list):
+            buffer[i] = Func.to_tensor(self.loader(frame, mode=self.mode).crop(lr_bound))[:1]
+        hr = Func.to_tensor(self.loader(hr_frame, mode=self.mode).crop(hr_bound))[:1]
+        return buffer, hr
