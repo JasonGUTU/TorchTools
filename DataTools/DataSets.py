@@ -4,6 +4,7 @@ import torchvision.transforms as transforms
 from PIL import Image
 import os, random, json
 import os.path
+from collections import OrderedDict
 import numpy as np
 import skimage.io as io
 # import dlib
@@ -410,51 +411,26 @@ class SimpleCropVideoFaceSRData(VideoFaceSRData):
         return buffer, hr
 
 
-class CropWithTemplateMatchVideoFaceSR(VideoFaceSRData):
+class LoadSimpleCropVideoFaceSRData(VideoFaceSRData):
 
     def __init__(self, data_folder_root, gt_folder_root, dets_dict_root, LR_size=16, scala=8, time_window=5, time_stride=7, loader=pil_loader, mode='YCbCr'):
-        super(CropWithTemplateMatchVideoFaceSR, self).__init__(data_folder_root, gt_folder_root, time_window=time_window, time_stride=time_stride, loader=loader, mode=mode)
+        super(LoadSimpleCropVideoFaceSRData, self).__init__(data_folder_root, gt_folder_root, time_window=time_window, time_stride=time_stride, loader=loader, mode=mode)
         with open(dets_dict_root, 'r') as f:
             self.det16 = json.load(f)
         self.lr_size = LR_size
         self.scala = scala
-
-    def _match_score(self, middle_patch, ref_patch):
-        """
-        :param middle_patch: PIL.Image
-        :param ref_patch: PIL.Image
-        :return:
-        """
-        return torch.sum(Func.to_tensor(middle_patch) - Func.to_tensor(ref_patch))
+        self.buffer_dict = OrderedDict()
 
     def __getitem__(self, index):
-        video_index, sample_index = self._index_parser(index)
-        load_list, hr_frame = self._load_frames(video_index, sample_index)
-        buffer = [None] * self.time_window
-        video_name, frame_name = video_frame_names(hr_frame)
-        lr_bound, hr_bound = Func.crop_bound_correspong_L2H(self.det16[video_name][frame_name][5], lr_size=self.lr_size, up_scala=self.scala)
-        for i, frame in enumerate(load_list):
-            buffer[i] = Func.to_tensor(self.loader(frame, mode=self.mode).crop(lr_bound))[:1]
-        hr = Func.to_tensor(self.loader(hr_frame, mode=self.mode).crop(hr_bound))[:1]
-        return buffer, hr
-
-
-class PreLoad_SimpleCropVideoFaceSRData(data.Dataset):
-    def __init__(self, data_folder_root, gt_folder_root, dets_dict_root, LR_size=16, scala=8, time_window=5, time_stride=7, loader=pil_loader, mode='YCbCr'):
-        super(PreLoad_SimpleCropVideoFaceSRData, self).__init__()
-        print('test')
-        self.dataset = SimpleCropVideoFaceSRData(data_folder_root, gt_folder_root, dets_dict_root, LR_size=LR_size, scala=scala, time_window=time_window, time_stride=time_stride, loader=loader, mode=mode)
-        print('test')
-        self.data = [None] * len(self.dataset)
-        print('test')
-        for i in range(len(self.dataset)):
-            self.data[i] = self.dataset[i]
-            print(i)
-
-    def __getitem__(self, item):
-        return self.data[item]
-
-    def __len__(self):
-        return len(self.data)
-
-
+        if index in self.buffer_dict.keys():
+            return self.buffer_dict[index]
+        else:
+            video_index, sample_index = self._index_parser(index)
+            load_list, hr_frame = self._load_frames(video_index, sample_index)
+            buffer = [None] * self.time_window
+            video_name, frame_name = video_frame_names(hr_frame)
+            lr_bound, hr_bound = Func.crop_bound_correspong_L2H(self.det16[video_name][frame_name][5], lr_size=self.lr_size, up_scala=self.scala)
+            for i, frame in enumerate(load_list):
+                buffer[i] = Func.to_tensor(self.loader(frame, mode=self.mode).crop(lr_bound))[:1]
+            hr = Func.to_tensor(self.loader(hr_frame, mode=self.mode).crop(hr_bound))[:1]
+            return buffer, hr

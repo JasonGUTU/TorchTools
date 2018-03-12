@@ -46,6 +46,7 @@ def _video_image_file(path):
     """
     abs_path = os.path.abspath(path)
     video_list = os.listdir(abs_path)
+    video_list.sort()
     frame_list = [None] * len(video_list)
     for i in range(len(video_list)):
         video_list[i] = os.path.join(path, video_list[i])

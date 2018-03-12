@@ -10,7 +10,7 @@ except:
     def log2(x):
         return log(x) / log(2)
 
-from .modules import Features4Layer, Features3Layer, residualBlock, upsampleBlock, LateUpsamplingBlock
+from .modules import Features4Layer, Features3Layer, residualBlock, upsampleBlock, LateUpsamplingBlock, LateUpsamplingBlockNoBN
 from .activation import swish
 
 
@@ -152,6 +152,71 @@ class EaryFusion(nn.Module):
         ))
 
 
+class EarlyEarly(nn.Module):
+    """
+    model implementation of the Early Fusion
+    This is not a complete SR model, just **Fusion Part**
+    """
+    def __init__(self, features=64, activation=relu):
+        """
+        :param features: the number of final feature maps
+        """
+        super(EarlyEarly, self).__init__()
+        self.act = activation
+        self.conv = nn.Conv2d(5, features, 3, stride=1, padding=1)
+        self.c1 = nn.Conv2d(features, features, 3, padding=1)
+        self.c2 = nn.Conv2d(features, features, 3, padding=1)
+        self.c3 = nn.Conv2d(features, features, 3, padding=1)
+
+    def forward(self, frame_1, frame_2, frame_3, frame_4, frame_5):
+        """
+        :param frame_1: frame t-2
+        :param frame_2: frame t-1
+        :param frame_3: frame t
+        :param frame_4: frame t+1
+        :param frame_5: frame t+2
+        :return: features
+        """
+        return self.act(self.c3(self.act(self.c2(self.act(self.c1(self.act(self.conv(torch.cat(
+                (frame_1,
+                 frame_2,
+                 frame_3,
+                 frame_4,
+                 frame_5),
+                dim=1)))))))))
+
+
+class _3DConv(nn.Module):
+    def __init__(self,features=64, activation=relu):
+        super(_3DConv, self).__init__()
+        self.act = activation
+        self.n_features = features
+        self.conv3d = nn.Conv3d(1, features, (5, 3, 3), padding=(0, 1, 1))
+        self.c1 = nn.Conv2d(features, features, 3, padding=1)
+        self.c2 = nn.Conv2d(features, features, 3, padding=1)
+        self.c3 = nn.Conv2d(features, features, 3, padding=1)
+
+    def forward(self, frame_1, frame_2, frame_3, frame_4, frame_5):
+        batch, C, H, W = frame_1.size()
+        frame_1 = frame_1.view((batch, C, 1, H, W))
+        frame_2 = frame_2.view((batch, C, 1, H, W))
+        frame_3 = frame_3.view((batch, C, 1, H, W))
+        frame_4 = frame_4.view((batch, C, 1, H, W))
+        frame_5 = frame_5.view((batch, C, 1, H, W))
+        frame_block = torch.cat(
+            (frame_1,
+             frame_2,
+             frame_3,
+             frame_4,
+             frame_5), dim=2)
+        _3dfeatures = self.act(self.conv3d(frame_block))
+        _3dfeatures = _3dfeatures.view((batch, self.n_features, H, W))
+        return self.act(self.c3(
+            self.act(self.c2(
+                self.act(self.c1(_3dfeatures))
+            ))
+        ))
+
 class HallucinationOrigin(nn.Module):
     """
     Original Video Face Hallucination Net
@@ -245,6 +310,40 @@ class StepHallucinationNet(nn.Module):
         return F.tanh(self.conv(self.pad(features)))
 
 
+class StepHallucinationNoBN(nn.Module):
+    """
+    |-----------------------------------|
+    |             features              |
+    |-----------------------------------|
+    | log2(scala) | LateUpsamplingBlock |
+    |-----------------------------------|
+    |       Convolution and Tanh        |
+    |-----------------------------------|
+    """
+    def __init__(self, scala=8, features=64, little_res_blocks=3, output_channel=1):
+        """
+        :param scala: scala factor
+        :param features:
+        :param little_res_blocks: The number of residual blocks in every late upsample blocks
+        :param output_channel: default to be 1 for Y channel
+        """
+        super(StepHallucinationNoBN, self).__init__()
+        self.scala = scala
+        self.features = features
+        self.n_res_blocks = little_res_blocks
+
+        for i in range(int(log2(self.scala))):
+            self.add_module('lateUpsampling' + str(i + 1), LateUpsamplingBlockNoBN(features, n_res_block=little_res_blocks))
+
+        self.pad = nn.ReflectionPad2d(3)
+        self.conv = nn.Conv2d(features, output_channel, 7, stride=1, padding=0)
+
+    def forward(self, features):
+        for i in range(int(log2(self.scala))):
+            features = self.__getattr__('lateUpsampling' + str(i + 1))(features)
+        return F.tanh(self.conv(self.pad(features)))
+
+
 class FusionModel(nn.Module):
     """
     The Multi-frame face hallucination model
@@ -254,9 +353,12 @@ class FusionModel(nn.Module):
         :param fusion: 'mdf'=MaxActivationFusion,
                        'early'=EaryFusion,
                        'mef'=MeanActivationFusion,
-                       'earlyMean'=EarlyMean
+                       'earlyMean'=EarlyMean,
+                       'ee'=EarlyEarly,
+                       '3d'=_3DConv
         :param upsample: 'org'=HallucinationOrigin,
-                         'step'=StepHallucinationNet
+                         'step'=StepHallucinationNet,
+                         'no'=StepHallucinationNoBN
         """
         super(FusionModel, self).__init__()
         if fusion == 'mdf':
@@ -267,6 +369,10 @@ class FusionModel(nn.Module):
             self.features = MeanActivationFusion()
         elif fusion == 'earlyMean':
             self.features = EarlyMean()
+        elif fusion == 'ee':
+            self.features = EarlyEarly()
+        elif fusion == '3d':
+            self.features = _3DConv()
         else:
             raise Exception('Wrong Parameter: fusion')
 
@@ -274,6 +380,8 @@ class FusionModel(nn.Module):
             self.upsample = HallucinationOrigin(scala=scala)
         elif upsample == 'step':
             self.upsample = StepHallucinationNet(scala=scala)
+        elif upsample == 'no':
+            self.upsample = StepHallucinationNoBN(scala=scala)
         else:
             raise Exception('Wrong Parameter: upsample')
 
@@ -290,7 +398,8 @@ class SingleImageBaseline(nn.Module):
         :param feature: 'f3'=Features3Layer
                         'f4'=Features4Layer
         :param upsample: 'org'=HallucinationOrigin,
-                         'step'=StepHallucinationNet
+                         'step'=StepHallucinationNet,
+                         'no'=StepHallucinationNoBN
         """
         super(SingleImageBaseline, self).__init__()
         if feature == 'f3':
@@ -304,8 +413,17 @@ class SingleImageBaseline(nn.Module):
             self.upsample = HallucinationOrigin(scala=scala)
         elif upsample == 'step':
             self.upsample = StepHallucinationNet(scala=scala)
+        elif upsample == 'no':
+            self.upsample = StepHallucinationNoBN(scala=scala)
         else:
             raise Exception('Wrong Parameter: upsample')
 
     def forward(self, frame):
         return self.upsample(self.features(frame))
+
+
+def multi_to_single_step_upsample(Multi_state_dict):
+    for key in dict(Multi_state_dict).keys():
+        if key.startswith('features.features.'):
+            Multi_state_dict[key[9:]] = Multi_state_dict.pop(key)
+    return Multi_state_dict

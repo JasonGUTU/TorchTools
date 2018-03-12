@@ -33,6 +33,22 @@ class residualBlock(nn.Module):
         return self.bn2(self.conv2(self.pad2(y))) + x
 
 
+class residualBlockNoBN(nn.Module):
+
+    def __init__(self, in_channels=64, kernel=3, mid_channels=64, out_channels=64, stride=1, activation=relu):
+        super(residualBlockNoBN, self).__init__()
+        self.act = activation
+        self.pad1 = nn.ReflectionPad2d((kernel // 2))
+        self.conv1 = nn.Conv2d(in_channels=in_channels, out_channels=mid_channels, kernel_size=kernel, stride=stride, padding=0)
+        self.pad2 = nn.ReflectionPad2d((kernel // 2))
+        self.conv2 = nn.Conv2d(in_channels=mid_channels, out_channels=out_channels, kernel_size=kernel, stride=stride, padding=0)
+
+    def forward(self, x):
+        y = self.act(self.conv1(self.pad1(x)))
+        return self.conv2(self.pad2(y)) + x
+
+
+
 class upsampleBlock(nn.Module):
 
     def __init__(self, in_channels, out_channels, activation=relu):
@@ -145,6 +161,36 @@ class LateUpsamplingBlock(nn.Module):
 
         for i in range(self.n_residual_blocks):
             self.add_module('residual_block' + str(i + 1), residualBlock(features))
+
+        self.upsample = upsampleBlock(features, features * 4)
+
+    def forward(self, features):
+        for i in range(self.n_residual_blocks):
+            features = self.__getattr__('residual_block' + str(i + 1))(features)
+        return self.upsample(features)
+
+
+class LateUpsamplingBlockNoBN(nn.Module):
+    """
+    this is another up-sample block for step upsample
+    |------------------------------|
+    |           features           |
+    |------------------------------|
+    |   n   |   residual blocks    |
+    |------------------------------|
+    | Pixel shuffle up-sampling x2 |
+    |------------------------------|
+    """
+    def __init__(self, features=64, n_res_block=3):
+        """
+        :param features: number of feature maps input
+        :param n_res_block: number of residual blocks
+        """
+        super(LateUpsamplingBlockNoBN, self).__init__()
+        self.n_residual_blocks = n_res_block
+
+        for i in range(self.n_residual_blocks):
+            self.add_module('residual_block' + str(i + 1), residualBlockNoBN(features))
 
         self.upsample = upsampleBlock(features, features * 4)
 
