@@ -5,6 +5,13 @@ from torch.nn.functional import relu
 
 from .activation import swish
 
+
+class Flatten(nn.Module):
+    def forward(self, x):
+        x = x.view(x.size()[0], -1)
+        return x
+
+
 class FeatureExtractor(nn.Module):
 
     def __init__(self, cnn, feature_layer=11):
@@ -46,7 +53,6 @@ class residualBlockNoBN(nn.Module):
     def forward(self, x):
         y = self.act(self.conv1(self.pad1(x)))
         return self.conv2(self.pad2(y)) + x
-
 
 
 class upsampleBlock(nn.Module):

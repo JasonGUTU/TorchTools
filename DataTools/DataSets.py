@@ -16,7 +16,33 @@ from .Loaders import pil_loader, load_to_tensor
 from .Prepro import _id, random_pre_process
 
 from ..Functions import functional as Func
-from ..Functions.TestTools import face_detection_5marks, high_point_to_low_point, generat_detection_label
+from ..Functions.TestTools import high_point_to_low_point
+
+
+class SimpleImageData(data.Dataset):
+    def __init__(self, data_root, image_size=(32, 32), loader=pil_loader, mode='Y'):
+        self.data = data_root
+        self.img_list = _image_file(self.data)
+        if image_size:
+            self.size = image_size
+        self.loader = loader
+        self.mode = mode
+
+    def _return_mode(self, pil):
+        if self.mode == 'Y':
+            return Func.to_tensor(pil)[:1]
+        else:
+            return Func.to_tensor(pil)
+
+    def __getitem__(self, index):
+        pil = self.loader(self.img_list[index])
+        if self.size:
+            return self._return_mode(pil.resize(self.size, Image.BICUBIC))
+        else:
+            return self._return_mode(pil)
+
+    def __len__(self):
+        return len(self.img_list)
 
 
 class SRDataSet(data.Dataset):
@@ -267,35 +293,6 @@ class VideoData(data.Dataset):
 
     def __len__(self):
         return sum(self.n_samples)
-
-
-# class FaceDetectorData(data.Dataset):
-#     """
-#     This data set is for training face detector
-#     """
-#     def __init__(self, image_folder, image_size=(960, 540), lr_image_size=(120, 67), dlib_predictor='/home/sensetime/Documents/shape_predictor_68_face_landmarks.dat'):
-#         """
-#         :param image_folder: the hr image folder
-#         :param image_size: w, h
-#         :param lr_image_size: w, h
-#         :param dlib_predictor:
-#         """
-#         self.detector = dlib.get_frontal_face_detector()
-#         self.predictor = dlib.shape_predictor(dlib_predictor)
-#         self.image_file_list = _all_images(image_folder)
-#         self.l_size = lr_image_size
-#         self.l_w, self.l_h = lr_image_size
-#         self.h_size = image_size
-#
-#     def __getitem__(self, index):
-#         file_path = self.image_file_list[index]
-#         points_hr = face_detection_5marks(file_path, self.detector, self.predictor)
-#         points_on_lr = high_point_to_low_point(points_hr, self.h_size, self.l_size)
-#         lr_image = Func.to_tensor(Func.resize(pil_loader(file_path, mode='YCbCr'), (self.l_h, self.l_w)))[0]
-#         return lr_image, generat_detection_label(points_on_lr, self.l_w, self.l_h)
-#
-#     def __len__(self):
-#         return len(self.image_file_list)
 
 
 class OpticalFlowData(data.Dataset):

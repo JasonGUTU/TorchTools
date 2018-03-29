@@ -217,6 +217,7 @@ class _3DConv(nn.Module):
             ))
         ))
 
+
 class HallucinationOrigin(nn.Module):
     """
     Original Video Face Hallucination Net

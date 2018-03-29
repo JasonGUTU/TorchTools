@@ -21,6 +21,9 @@ class _FileLogger(object):
 
     def add_log(self, value_list):
         assert len(value_list) == self.len, "Log Value doesn't match"
+        for i in range(self.len):
+            if not isinstance(value_list[i], str):
+                value_list[i] = str(value_list[i])
         with open(self.log_file_name, 'a') as f:
             f.write(','.join(value_list) + '\n')
 

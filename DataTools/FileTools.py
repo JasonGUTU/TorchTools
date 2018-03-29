@@ -107,7 +107,7 @@ def _sample_from_videos_frames_large(path, time_window, time_stride):
     pass
 
 
-def _image_file(path):
+def _image_file(path):  # TODO: wrong function
     """
     return list of images in the path
     :param path: path to Data Folder, absolute path

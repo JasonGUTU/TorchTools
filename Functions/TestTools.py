@@ -7,6 +7,9 @@ from scipy import misc
 import torch
 from torch.autograd import Variable
 
+from ..DataTools.FileTools import _image_file
+from ..DataTools.Loaders import pil_loader, load_to_tensor
+
 
 RY = 15
 YG = 6
@@ -76,19 +79,16 @@ def _tanh_to_sigmoid(x):
     return x * 0.5 + 0.5
 
 
-def generat_detection_label(point_set, size_w, size_h):
-    """
-    This function is done at PIL.Image!!
-    :param point_set: the point set on PIL.Image
-    :param image_size: Of type PIL.Image!!
-    :return: labels with m channels, m is the number of points
-    """
-    number = len(point_set)
-    label = np.zeros((number, size_h, size_w), dtype=np.float32)
-    for i, point in enumerate(point_set):
-        x, y = point
-        label[i, int(y), int(x)] = 1.
-    return torch.FloatTensor(label)
+def test_pool(path, cuda=True, mode='Y', normalization_func=_sigmoid_to_tanh):
+    img_path_list = _image_file(path)
+    test_img_pool = list()
+    for i in range(len(img_path_list)):
+        pic = Variable(_add_batch_one(normalization_func(load_to_tensor(img_path_list[i], mode=mode))))
+        if cuda:
+            test_img_pool.append(pic.cuda())
+        else:
+            test_img_pool.append(pic)
+    return test_img_pool
 
 
 def high_point_to_low_point(point_set, size_h, size_l):
@@ -207,28 +207,6 @@ def landmark_5(landmarks):
     left_mouth = _centroid(landmarks, LEFT_MOUTH)
     right_mouth = _centroid(landmarks, RIGHT_MOUTH)
     return np.array([left_eye, right_eye, nose, left_mouth, right_mouth])
-
-
-def face_detection_6marks(path, detector, predictor):
-    """
-    :param path: image path
-    :param detector: detector
-    :param predictor: predictor
-    :return:
-    """
-    img = io.imread(path)
-    return landmark_6(get_landmarks(img, detector, predictor))
-
-
-def face_detection_5marks(path, detector, predictor):
-    """
-    :param path: image path
-    :param detector: detector
-    :param predictor: predictor
-    :return:
-    """
-    img = io.imread(path)
-    return landmark_5(get_landmarks(img, detector, predictor))
 
 
 def make_color_wheel():
