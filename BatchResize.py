@@ -8,11 +8,11 @@ from Functions.functional import resize
 
 parser = argparse.ArgumentParser()
 
-parser.add_argument('-i', '--input', type=str, default='../../000_src_data/vid215_201712271749')
-parser.add_argument('-o', '--output', type=str, default='01_cut/cut_vid215_201801031127')
-parser.add_argument('-s', '--scala', type=int, default=2)
-parser.add_argument('-v', type=bool, default=True)
-parser.add_argument('--up', type=bool, default=False)
+parser.add_argument('-i', '--input', type=str, default='/home/sensetime/Documents/NTIRE2019/SRdata/Train_GT_down')
+parser.add_argument('-o', '--output', type=str, default='/home/sensetime/Documents/NTIRE2019/SRdata/Train_GT_bicubic')
+parser.add_argument('-s', '--scala', type=int, default=4)
+parser.add_argument('-v', type=bool, default=False)
+parser.add_argument('--up', type=bool, default=True)
 args = parser.parse_args()
 
 input_path = os.path.abspath(args.input)
@@ -37,8 +37,11 @@ def resize_and_save(file_org, output, scala):
     im = resize(im, (int(h // scala), int(w // scala)))
     name = os.path.split(file_org)
     vdir = os.path.split(name[0])
-    save_name = os.path.join(output, vdir[1])
-    save_name = os.path.join(save_name, name[1])
+    if V:
+        save_name = os.path.join(output, vdir[1])
+        save_name = os.path.join(save_name, name[1])
+    else:
+        save_name = os.path.join(output, name[1])
     im.save(save_name)
     print(save_name)
 
