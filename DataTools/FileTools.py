@@ -13,6 +13,19 @@ from PIL import Image
 IMG_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.ppm', '.bmp', '.pgm']
 
 
+def mkdirs(paths):
+    if isinstance(paths, list) and not isinstance(paths, str):
+        for path in paths:
+            mkdir(path)
+    else:
+        mkdir(paths)
+
+
+def mkdir(path):
+    if not os.path.exists(path):
+        os.makedirs(path)
+
+
 def _is_image_file(filename):
     """
     judge if the file is an image file
@@ -136,6 +149,7 @@ def _all_images(path):
         else:
             if _is_image_file(subpath):
                 image_files.append(os.path.join(abs_path, subpath))
+    image_files.sort()
     return image_files
 
 

@@ -96,7 +96,6 @@ class CalliUpsampleNet(nn.Module):
         self.act = activation
 
 
-
 class EDCalliTransferNet(nn.Module):
     """
     Encoder-Decoder Transfer Net
@@ -182,4 +181,61 @@ class EDCalliTransferNet(nn.Module):
     def forward(self, input):
         code = self._enocder(input)
         return self._decoder(code)
+
+
+class CaliNet(nn.Module):
+    def __init__(self, input_nc, output_nc, ngf=64, norm_layer=nn.InstanceNorm2d, use_dropout=False, n_blocks=6, padding_type='reflect'):
+        super(CaliNet, self).__init__()
+        self.conv = nn.Sequential(
+            *[
+                nn.Conv2d(input_nc, ngf, kernel_size=5, stride=1, padding=2),
+                nn.ReLU(),
+                nn.Conv2d(ngf, ngf * 2, kernel_size=5, stride=2, padding=2),
+                norm_layer(ngf * 2),
+                nn.ReLU(),
+                nn.Conv2d(ngf * 2, ngf * 2, kernel_size=5, stride=1, padding=2),
+                norm_layer(ngf * 2),
+                nn.ReLU(),
+                nn.Conv2d(ngf * 2, ngf * 4, kernel_size=5, stride=2, padding=2),
+                norm_layer(ngf * 4),
+                nn.ReLU(),
+                nn.Conv2d(ngf * 4, ngf * 4, kernel_size=5, stride=1, padding=2),
+                norm_layer(ngf * 4),
+                nn.ReLU(),
+                nn.Conv2d(ngf * 4, ngf * 4, kernel_size=5, stride=2, padding=2),
+                norm_layer(ngf * 4),
+                nn.ReLU(),
+                nn.Conv2d(ngf * 4, ngf * 4, kernel_size=5, stride=1, padding=2),
+                norm_layer(ngf * 4),
+                nn.ReLU(),
+                nn.Conv2d(ngf * 4, ngf * 4, kernel_size=5, stride=1, padding=2),
+                norm_layer(ngf * 4),
+                nn.ReLU(),
+            ]
+        )
+        self.decv = nn.Sequential(
+            *[
+                nn.ConvTranspose2d(ngf * 4, ngf * 4, kernel_size=4, stride=2, padding=1),
+                norm_layer(ngf * 4),
+                nn.ReLU(),
+                nn.ConvTranspose2d(ngf * 4, ngf * 4, kernel_size=5, stride=1, padding=2),
+                norm_layer(ngf * 4),
+                nn.ReLU(),
+                nn.ConvTranspose2d(ngf * 4, ngf * 2, kernel_size=4, stride=2, padding=1),
+                norm_layer(ngf * 2),
+                nn.ReLU(),
+                nn.ConvTranspose2d(ngf * 2, ngf * 2, kernel_size=5, stride=1, padding=2),
+                norm_layer(ngf * 2),
+                nn.ReLU(),
+                nn.ConvTranspose2d(ngf * 2, ngf * 1, kernel_size=4, stride=2, padding=1),
+                nn.ReLU(),
+                nn.ConvTranspose2d(ngf * 1, output_nc, kernel_size=5, stride=1, padding=2)
+            ]
+        )
+
+    def forward(self, input):
+        x = self.conv(input)
+        x = self.decv(x)
+        return x
+
 

@@ -16,28 +16,52 @@ from .Loaders import pil_loader, load_to_tensor
 from .Prepro import _id, random_pre_process
 
 from ..Functions import functional as Func
-from ..Functions.TestTools import high_point_to_low_point
+from ..TorchNet.RLSR import random_gaussian_kernel
+
+
+class PreLoad(data.Dataset):
+    def __init__(self, data_path, gt_path):
+        self.data = torch.load(data_path)
+        self.gt = torch.load(gt_path)
+        assert len(self.data) == len(self.gt), "Wrong"
+        self.leng = len(self.data)
+        print('Data loaded, %d' % self.leng)
+
+    def __getitem__(self, item):
+        return self.data[item], self.gt[item]
+
+    def __len__(self):
+        return self.leng
 
 
 class SimpleImageData(data.Dataset):
-    def __init__(self, data_root, image_size=(32, 32), loader=pil_loader, mode='Y'):
+    def __init__(self, data_root, image_size=32, scale=1, loader=pil_loader, mode='Y', crop=True, prepro=random_pre_process):
+        print('Initializing DataSet, data root: %s ...' % data_root)
         self.data = data_root
-        self.img_list = _image_file(self.data)
-        if image_size:
-            self.size = image_size
+        self.img_list = _all_images(self.data)
+        print('Found %d Images...' % len(self.img_list))
+        self.size = image_size
         self.loader = loader
         self.mode = mode
+        self.scale = scale
+        if hasattr(prepro, '__call__'):
+            self.prepro = prepro
+        else:
+            self.prepro = _id
+        self.crop_size = crop
 
     def _return_mode(self, pil):
         if self.mode == 'Y':
-            return Func.to_tensor(pil)[:1]
+            return Func.to_tensor(pil)[:1, :, :]
         else:
             return Func.to_tensor(pil)
 
     def __getitem__(self, index):
-        pil = self.loader(self.img_list[index])
-        if self.size:
-            return self._return_mode(pil.resize(self.size, Image.BICUBIC))
+        pil = self.prepro(self.loader(self.img_list[index]))
+        if self.scale != 1:
+            pil = Func.resize(pil, (pil.size[0] // self.scale, pil.size[1] // self.scale), interpolation=Image.BICUBIC)
+        if self.crop_size:
+            return self._return_mode(Func.random_crop(pil, self.size))
         else:
             return self._return_mode(pil)
 
@@ -88,7 +112,6 @@ class SRDataSet(data.Dataset):
 
     def __getitem__(self, index):
         """
-
         :param index:
         :return:
         """
@@ -102,6 +125,66 @@ class SRDataSet(data.Dataset):
             return Func.to_tensor(lr_img)[:1], Func.to_tensor(hr_img)[:1]
         else:
             return Func.to_tensor(lr_img), Func.to_tensor(hr_img)
+
+    def __len__(self):
+        return len(self.image_file_list)
+
+
+class SRMDDataSet(data.Dataset):
+    """
+    DataSet for small images, easy to read
+    do not need buffer
+    random crop.
+    all the image are same size
+    """
+    def __init__(self,
+                 data_path,
+                 lr_patch_size,
+                 image_size,
+                 scala=4,
+                 interp=Image.BICUBIC,
+                 mode='Y',
+                 sub_dir=False,
+                 prepro=random_pre_process):
+        """
+            :param data_path: Path to data root
+            :param lr_patch_size: the Low resolution size, by default, the patch is square
+            :param scala: SR scala, default is 4
+            :param interp: interpolation for resize, default is Image.BICUBIC, optional [Image.BILINEAR, Image.BICUBIC]
+            :param mode: 'RGB' or 'Y'
+            :param sub_dir: if True, then all the images in the `data_path` directory AND child directory will be use
+            :parem prepro: function fo to ``PIL.Image``!, will run this function before crop and resize
+        """
+        data_path = os.path.abspath(data_path)
+        print('Initializing DataSet, data root: %s ...' % data_path)
+        if sub_dir:
+            self.image_file_list = _all_images(data_path)
+        else:
+            self.image_file_list = _image_file(data_path)
+        print('Found %d Images...' % len(self.image_file_list))
+        assert lr_patch_size * scala <= image_size, "Wrong size."
+        self.lr_size = lr_patch_size
+        self.image_size = image_size
+        self.scala = scala
+        self.interp = interp
+        self.mode = mode
+        self.crop_size = lr_patch_size * scala
+        self.prepro = prepro
+
+    def __getitem__(self, index):
+        """
+        :param index:
+        :return:
+        """
+        if self.mode == 'Y':
+            image = pil_loader(self.image_file_list[index], mode='YCbCr')
+        else:
+            image = pil_loader(self.image_file_list[index], mode=self.mode)
+        hr_img = Func.random_crop(self.prepro(image), self.crop_size)
+        if self.mode == 'Y':
+            return Func.to_tensor(hr_img)[:1]
+        else:
+            return Func.to_tensor(hr_img)
 
     def __len__(self):
         return len(self.image_file_list)

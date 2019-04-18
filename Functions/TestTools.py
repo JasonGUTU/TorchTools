@@ -3,6 +3,7 @@ import os
 import numpy as np
 import skimage.io as io
 from scipy import misc
+from PIL import Image, ImageDraw
 
 import torch
 from torch.autograd import Variable
@@ -84,6 +85,7 @@ def test_pool(path, cuda=True, mode='Y', normalization_func=_sigmoid_to_tanh):
     test_img_pool = list()
     for i in range(len(img_path_list)):
         pic = Variable(_add_batch_one(normalization_func(load_to_tensor(img_path_list[i], mode=mode))))
+        pic.volatile = True
         if cuda:
             test_img_pool.append(pic.cuda())
         else:
@@ -114,12 +116,6 @@ def _center_point(point_1, point_2):
 
 def _euclid_distance(point_1, point_2):
     return np.sqrt(np.sum((point_1 - point_2) ** 2))
-
-
-def five_face_landmarks_bounding(left_eye, right_eye, nose, left_mouth, right_mouth):
-    top = _center_point(left_eye, right_eye)
-    down = _center_point(left_mouth, right_mouth)
-    return _euclid_distance(top, down)
 
 
 def _angle_point(center, point_1, point_2):
@@ -172,41 +168,6 @@ def _centroid(landmarks, point_list):
     x_mean = int(x.mean())
     y_mean = int(y.mean())
     return np.array([x_mean, y_mean])
-
-
-def center_face(five_points):
-    eye_center = _center_point(five_points[0], five_points[1])
-    mouth_center = _center_point(five_points[3], five_points[4])
-    return _center_point(eye_center, mouth_center)
-
-
-def landmark_6(landmarks):
-    """
-    Return 6 landmarks : left_eye, right_eye, mouth, left, right, down
-    :param landmarks: landmarks matrix
-    :return: the points of 6 landmarks, ndarray
-    """
-    left_eye = _centroid(landmarks, LEFT_EYE)
-    right_eye = _centroid(landmarks, RIGHT_EYE)
-    mouth = _centroid(landmarks, MOUTH)
-    left = _centroid(landmarks, LEFT_MOST)
-    right = _centroid(landmarks, RIGHT_MOST)
-    down = _centroid(landmarks, DOWN_MOST)
-    return np.array([left_eye, right_eye, mouth, left, right, down])
-
-
-def landmark_5(landmarks):
-    """
-    Return 5 landmarks : left_eye, right_eye, left_mouth, right_mouth, nose
-    :param landmarks: landmarks matrix
-    :return: the points of 6 landmarks, ndarray
-    """
-    left_eye = _centroid(landmarks, LEFT_EYE)
-    right_eye = _centroid(landmarks, RIGHT_EYE)
-    nose = _centroid(landmarks, NOSE_TIP)
-    left_mouth = _centroid(landmarks, LEFT_MOUTH)
-    right_mouth = _centroid(landmarks, RIGHT_MOUTH)
-    return np.array([left_eye, right_eye, nose, left_mouth, right_mouth])
 
 
 def make_color_wheel():
@@ -292,3 +253,18 @@ def flow_to_color(flow, normalized=True):
     res[~mask] *= .75  # out of range
 
     return res
+
+
+def DrawBoxAndCrop(img, leftup_point, box_size, upsample=1, line_width=2, color='red', resample=Image.NEAREST):
+    leftup_x, leftup_y = leftup_point
+    if isinstance(box_size, int):
+        crop_x = box_size
+        crop_y = box_size
+    else:
+        crop_x, crop_y = box_size
+    imgc = img.copy()
+    img_crop = img.crop((leftup_x, leftup_y, leftup_x + crop_x, leftup_y + crop_y))
+    draw = ImageDraw.Draw(imgc)
+    draw.line([(leftup_x, leftup_y),(leftup_x+crop_x, leftup_y),(leftup_x+crop_x, leftup_y+crop_y),(leftup_x, leftup_y+crop_y),(leftup_x, leftup_y)], fill=color, width=line_width)
+    img_crop = img_crop.resize((crop_x*upsample, crop_y*upsample), resample=resample)
+    return imgc, img_crop

@@ -23,6 +23,14 @@ def _remove_batch(tensor):
     return tensor.view(tensor.size()[1:])
 
 
+def _add_channel_one(tensor):
+    return tensor.view(tensor.size()[:1] + (1, ) + tensor.size()[-2:])
+
+
+def _remove_channel(tensor):
+    return tensor.view((tensor.size()[0] * tensor.size()[1],) + tensor.size()[-2:])
+
+
 def PIL2Tensor(img):
     """
     Converts a PIL Image or numpy.ndarray (H, W, C) in the range [0, 255] to a torch.FloatTensor of shape (1, C, H, W) in the range [0.0, 1.0].
@@ -46,14 +54,14 @@ def Tensor2PIL(tensor, mode=None):
         return to_pil_image(_remove_batch(tensor))
 
 
-def PIL2VAR(img, norm_function=_id):
+def PIL2VAR(img, norm_function=_id, volatile=False):
     """
     Convert a PIL.Image to Variable directly
     :param img: PIL.Image
     :param norm_function: The normalization to the tensor
     :return: Variable
     """
-    return Variable(norm_function(PIL2Tensor(img)))
+    return Variable(norm_function(PIL2Tensor(img)), volatile=volatile)
 
 
 def VAR2PIL(img, non_norm_function=_id):
@@ -91,3 +99,20 @@ def load_to_tensor(path, mode='RGB'):
         return to_tensor(pil_loader(path, mode='YCbCr'))[:1]
 
 
+def YChannel(img_tensor_rgb, mode='yuv'):
+    """
+    :param img_tensor_rgb: RGB 4D tensor, [0, 1]
+    :param mode: yuv, ycbcr, edsr
+    :return: Y
+    """
+    if mode == 'yuv':
+        y = img_tensor_rgb[:, :1, :, :] * 0.299 + img_tensor_rgb[:, 1:2, :, :] * 0.587 + img_tensor_rgb[:, 2:3, :, :] * 0.114
+        return y
+    elif mode == 'ycbcr':
+        y = img_tensor_rgb[:, :1, :, :] * 0.257 + img_tensor_rgb[:, 1:2, :, :] * 0.504 + img_tensor_rgb[:, 2:3, :, :] * 0.098 + 0.0625
+        return y
+    elif mode == 'edsr':
+        y = img_tensor_rgb[:, :1, :, :] * 0.257 + img_tensor_rgb[:, 1:2, :, :] * 0.504 + img_tensor_rgb[:, 2:3, :, :] * 0.098
+        return y
+    else:
+        raise Exception('Check para mode')
